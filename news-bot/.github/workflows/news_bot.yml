@@ -1,0 +1,56 @@
+name: News Bot - Interactive
+
+on:
+  # امکان اجرای دستی
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: false
+        default: 'check_news'
+        type: string
+      user_id:
+        description: 'Telegram User ID'
+        required: false
+        type: string
+      keyword:
+        description: 'Keyword for news search'
+        required: false
+        type: string
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run news bot (scheduled check)
+      if: github.event.inputs.action == 'check_news' || github.event.inputs.action == ''
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      run: |
+        echo "Running scheduled news check..."
+        python news_bot_scheduled.py
+      continue-on-error: true
+
+    - name: Run interactive command
+      if: github.event.inputs.action == 'send_news'
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TARGET_USER_ID: ${{ github.event.inputs.user_id }}
+        SEARCH_KEYWORD: ${{ github.event.inputs.keyword }}
+      run: |
+        echo "Running interactive news search..."
+        python news_bot_interactive.py
