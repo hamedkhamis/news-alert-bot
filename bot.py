@@ -16,26 +16,6 @@ KEYWORDS = [
     "Artificial Intelligence",
 ]
 
-FEEDS = [
-    # SEO & Digital Marketing
-    "https://feeds.feedburner.com/Moz",
-    "https://searchengineland.com/feed",
-    "https://searchenginejournal.com/feed",
-    "https://www.semrush.com/blog/feed/",
-    "https://ahrefs.com/blog/feed/",
-    "https://neilpatel.com/blog/feed/",
-    "https://backlinko.com/feed",
-    # AI & Tech
-    "https://feeds.feedburner.com/venturebeat/SZYF",
-    "https://techcrunch.com/feed/",
-    "https://www.theverge.com/rss/index.xml",
-    "https://wired.com/feed/rss",
-    # Marketing & Soft Skills
-    "https://feeds.feedburner.com/hubspot/blog",
-    "https://hbr.org/feed",
-    "https://feeds.feedblitz.com/marketingprofs",
-]
-
 def load_seen():
     if os.path.exists(SEEN_FILE):
         with open(SEEN_FILE, "r", encoding="utf-8") as f:
@@ -75,41 +55,51 @@ def send_message(text):
         print(f"  Telegram error: {e}")
     time.sleep(1)
 
-def check_keyword(keyword, seen):
-    new_items = []
-
-    for feed_url in FEEDS:
+def fetch_google_news(keyword):
+    q = requests.utils.quote(f'"{keyword}" when:1d')
+    feeds = [
+        f"https://news.google.com/rss/search?q={q}&hl=en&gl=US&ceid=US:en",
+        f"https://news.google.com/rss/search?q={requests.utils.quote(keyword)}&hl=en&gl=US&ceid=US:en&sort=date",
+    ]
+    items = []
+    for url in feeds:
         try:
-            feed = feedparser.parse(feed_url)
-            for entry in feed.entries[:20]:
+            feed = feedparser.parse(url)
+            for entry in feed.entries[:15]:
                 link = entry.get("link", "")
                 title = entry.get("title", "")
                 published = entry.get("published_parsed", None)
-
                 try:
                     source = entry.source.title
                 except:
-                    source = feed.feed.get("title", "Unknown")
+                    source = "Google News"
 
-                # فیلتر بر اساس کیورد
-                if keyword.lower() not in title.lower():
-                    continue
-
-                if link and link not in seen:
-                    seen[link] = True
+                if link:
                     date_str = datetime(*published[:6]).strftime("%Y-%m-%d") if published else "N/A"
                     ago = time_ago(published) if published else "recently"
-                    new_items.append({
+                    items.append({
                         "title": title,
                         "link": link,
                         "source": source,
                         "date": date_str,
                         "ago": ago,
+                        "published": published,
                     })
         except Exception as e:
-            print(f"  Error: {feed_url} → {e}")
+            print(f"  Feed error: {e}")
 
-    return new_items
+    # مرتب‌سازی بر اساس جدیدترین
+    items.sort(key=lambda x: x["published"] if x["published"] else (2000,1,1,0,0,0), reverse=True)
+
+    # حذف تکراری‌ها
+    seen_titles = set()
+    unique = []
+    for item in items:
+        if item["link"] not in seen_titles:
+            seen_titles.add(item["link"])
+            unique.append(item)
+
+    return unique
 
 def main():
     seen = load_seen()
@@ -117,35 +107,13 @@ def main():
 
     for keyword in KEYWORDS:
         print(f"\n🔍 Checking: {keyword}")
-        new_items = check_keyword(keyword, seen)
+        all_items = fetch_google_news(keyword)
 
-        if not new_items:
-            # Google News به عنوان fallback
-            try:
-                q = requests.utils.quote(keyword)
-                url = f"https://news.google.com/rss/search?q={q}&hl=en&gl=US&ceid=US:en"
-                feed = feedparser.parse(url)
-                for entry in feed.entries[:10]:
-                    link = entry.get("link", "")
-                    title = entry.get("title", "")
-                    published = entry.get("published_parsed", None)
-                    try:
-                        source = entry.source.title
-                    except:
-                        source = "Google News"
-                    if link and link not in seen:
-                        seen[link] = True
-                        date_str = datetime(*published[:6]).strftime("%Y-%m-%d") if published else "N/A"
-                        ago = time_ago(published) if published else "recently"
-                        new_items.append({
-                            "title": title,
-                            "link": link,
-                            "source": source,
-                            "date": date_str,
-                            "ago": ago,
-                        })
-            except Exception as e:
-                print(f"  Google News error: {e}")
+        new_items = []
+        for item in all_items:
+            if item["link"] not in seen:
+                seen[item["link"]] = True
+                new_items.append(item)
 
         if not new_items:
             print(f"  No new results.")
