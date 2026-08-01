@@ -109,8 +109,8 @@ def fetch_google_news(keyword_obj):
             summary = clean_summary(raw_summary)
 
             # فیلتر منابع نامعتبر
-            if not is_trusted(link):
-                continue
+           # if not is_trusted(link):
+              #  continue
 
             # فیلتر SEO نامرتبط
             if keyword_obj["label"] == "SEO":
